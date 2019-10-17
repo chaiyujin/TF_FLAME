@@ -19,9 +19,12 @@ For comments or questions, please email us at flame@tue.mpg.de
 import os
 import numpy as np
 import tensorflow as tf
+from tqdm import tqdm
 from psbody.mesh import Mesh
 from psbody.mesh.meshviewer import MeshViewer
 from tensorflow.contrib.opt import ScipyOptimizerInterface as scipy_pt
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 
 def fit_3D_mesh(target_3d_mesh_fname, template_fname, tf_model_fname, weights, show_fitting=True):
     '''
@@ -94,6 +97,102 @@ def fit_3D_mesh(target_3d_mesh_fname, template_fname, tf_model_fname, weights, s
         return Mesh(session.run(tf_model), template_mesh.f)
 
 
+def fit_sources(
+    dir_tup_list,
+    tf_model_fname,
+    weight_reg_shape,
+    weight_reg_expr,
+    weight_reg_neck_pos,
+    weight_reg_jaw_pos,
+    weight_reg_eye_pos,
+):
+    saver = tf.train.import_meta_graph(tf_model_fname + '.meta')
+
+    graph = tf.get_default_graph()
+    tf_model = graph.get_tensor_by_name(u'vertices:0')
+
+    with tf.Session() as session:
+        saver.restore(session, tf_model_fname)
+
+        # get all params
+        tf_trans = [x for x in tf.trainable_variables() if 'trans' in x.name][0]
+        tf_rot   = [x for x in tf.trainable_variables() if 'rot'   in x.name][0]
+        tf_pose  = [x for x in tf.trainable_variables() if 'pose'  in x.name][0]
+        tf_shape = [x for x in tf.trainable_variables() if 'shape' in x.name][0]
+        tf_exp   = [x for x in tf.trainable_variables() if 'exp'   in x.name][0]
+
+        # mesh_dist     = tf.reduce_sum(tf.square(tf.subtract(tf_model, target_mesh.v)))
+        neck_pose_reg = tf.reduce_sum(tf.square(tf_pose[:3]))
+        jaw_pose_reg  = tf.reduce_sum(tf.square(tf_pose[3:6]))
+        eye_pose_reg  = tf.reduce_sum(tf.square(tf_pose[6:]))
+        shape_reg     = tf.reduce_sum(tf.square(tf_shape))
+        exp_reg       = tf.reduce_sum(tf.square(tf_exp))
+        reg_term = (
+            weight_reg_neck_pos * neck_pose_reg +
+            weight_reg_jaw_pos  * jaw_pose_reg  +
+            weight_reg_eye_pos  * eye_pose_reg  +
+            weight_reg_shape    * shape_reg     +
+            weight_reg_expr     * exp_reg
+        )
+
+        def _fit_sentence(src_dir, dst_dir, prm_dir):
+            if not os.path.exists(src_dir):
+                print("Failed to find", src_dir)
+                return
+            if not os.path.exists(dst_dir):
+                os.makedirs(dst_dir)
+            if not os.path.exists(prm_dir):
+                os.makedirs(prm_dir)
+
+            ply_files = []
+            for root, _, files in os.walk(src_dir):
+                for f in files:
+                    if os.path.splitext(f)[1] == ".ply":
+                        ply_files.append(os.path.join(root, f))
+            ply_files = sorted(ply_files)
+
+            # get shared
+            src_mesh = Mesh(filename=ply_files[0])
+            mesh_dist = tf.reduce_sum(tf.square(tf.subtract(tf_model, src_mesh.v)))
+
+            optimizer = scipy_pt(loss=mesh_dist, var_list=[tf_trans, tf_rot], method='L-BFGS-B', options={'disp': 1})
+            optimizer.minimize(session)
+
+            optimizer = scipy_pt(
+                loss=mesh_dist+reg_term,
+                var_list=[tf_trans, tf_rot, tf_pose, tf_shape, tf_exp],
+                method='L-BFGS-B',
+                options={'disp': 1}
+            )
+            optimizer.minimize(session)
+
+            # save iden
+            np.save(os.path.join(prm_dir, "iden.npy"), tf_shape.eval(), allow_pickle=False)
+
+            for src_fname in tqdm(ply_files):
+                dst_fname = os.path.join(dst_dir, os.path.basename(f))
+                # param filename
+                prm_fname = os.path.join(prm_dir, os.path.basename(f))
+                prm_fname = os.path.splitext(prm_fname)[0] + '_exp.npy'
+
+                src_mesh = Mesh(filename=src_fname)
+                mesh_dist = tf.reduce_sum(tf.square(tf.subtract(tf_model, src_mesh.v)))
+
+                optimizer = scipy_pt(
+                    loss=mesh_dist+reg_term,
+                    var_list=[tf_shape, tf_exp],
+                    method='L-BFGS-B', options={'disp': 0, 'maxiter': 20}
+                )
+                optimizer.minimize(session)
+
+                # save expr
+                np.save(prm_fname, tf_exp.eval())
+
+                # save mesh
+                fitting_mesh = Mesh(session.run(tf_model), src_mesh.f)
+                fitting_mesh.write_ply(dst_fname)
+
+
 def run_corresponding_mesh_fitting():
     # Path of the Tensorflow FLAME model
     tf_model_fname = './models/generic_model'
@@ -132,4 +231,15 @@ def run_corresponding_mesh_fitting():
 
 
 if __name__ == '__main__':
-    run_corresponding_mesh_fitting()
+    # run_corresponding_mesh_fitting()
+    fit_sources(
+        [("./vocaset/FaceTalk_170915_00223_TA/sentence01/",
+          "./vocaset/FaceTalk_170915_00223_TA_clean/sentence01/",
+          "./vocaset/FaceTalk_170915_00223_TA_param/sentence01/")],
+        tf_model_fname='./models/generic_model',
+        weight_reg_shape=1e-4,
+        weight_reg_expr=1e-7,
+        weight_reg_neck_pos=1e-4,
+        weight_reg_jaw_pos=1e-4,
+        weight_reg_eye_pos=1e-4,
+    )
