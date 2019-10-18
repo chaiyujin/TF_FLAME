@@ -224,7 +224,7 @@ def fit_sources(
             loss=mesh_dist+reg_term,
             var_list=[tf_trans, tf_rot, tf_pose, tf_shape, tf_exp],
             method='L-BFGS-B',
-            options={'disp': 0, 'maxiter': 5000}
+            options={'disp': 0}
         )
         optim_seq = scipy_pt(
             loss=mesh_dist+reg_term,
@@ -274,14 +274,22 @@ def fit_sources(
 
                 fitting_mesh = Mesh(session.run(tf_model), src_mesh.f)
                 fitting_mesh.write_ply(os.path.join(stt_dir, "zero.ply"))
+            fit_zero_dir = os.path.join(os.path.dirname(os.path.dirname(dst_dir)), "zero_exp")
+            if not os.path.exists(fit_zero_dir): os.makedirs(fit_zero_dir)
 
             print("- " + speaker + " " + os.path.basename(src_dir))
             print("  -> fit shared parameters...")
             optim_shared_rigid.minimize(session)
             optim_shared_all.minimize(session)
 
+            state_dict = _save_state("exp", set_zero=True)
+
             fitting_mesh = Mesh(session.run(tf_model), src_mesh.f)
-            fitting_mesh.write_ply(os.path.join(stt_dir, "expr.ply"))
+            fitting_mesh.write_ply(os.path.join(fit_zero_dir, "{}.ply".format(speaker)))
+
+            _load_state(state_dict)
+
+            return
 
             if not os.path.exists(stt_dir): os.makedirs(stt_dir)
             np.save(os.path.join(stt_dir, "trans.npy"), tf_trans.eval(), allow_pickle=False)
@@ -329,7 +337,7 @@ def fit_sources(
 
 
 def run_vocaset():
-    root = "/media/chaiyujin/FE6C78966C784B81/Linux/Dataset/Animation/VOCA/"
+    root = "/home/chaiyujin/Documents/Dataset/VOCA/"
     subdirs = [
         "FaceTalk_170725_00137_TA",
         "FaceTalk_170728_03272_TA",
@@ -355,34 +363,35 @@ def run_vocaset():
             prm_dir = os.path.join(root, "flame_fitted", subdir + "_param", sentence)
             if os.path.exists(src_dir):
                 dir_tup_list.append((src_dir, dst_dir, prm_dir))
+                break
 
     fit_sources(
         dir_tup_list,
         tf_model_fname='./models/generic_model',
         template_fname='./data/template.ply',
-        weight_reg_shape=1e-4,
-        weight_reg_expr=1e-7,
-        weight_reg_neck_pos=1e-4,
-        weight_reg_jaw_pos=1e-4,
-        weight_reg_eye_pos=1e-4,
+        weight_reg_shape    = 1e-7,
+        weight_reg_expr     = 1e-7,
+        weight_reg_neck_pos = 1e-4,
+        weight_reg_jaw_pos  = 1e-4,
+        weight_reg_eye_pos  = 1e-4,
     )
 
 
 if __name__ == '__main__':
-    # run_vocaset()
+    run_vocaset()
 
     # run_corresponding_mesh_fitting()
 
-    fit_sources(
-        [("./vocaset/FaceTalk_170915_00223_TA/sentence01",
-          "./vocaset/flame_fitted/FaceTalk_170915_00223_TA_clean/sentence01",
-          "./vocaset/flame_fitted/FaceTalk_170915_00223_TA_param/sentence01")],
-        tf_model_fname      = './models/generic_model',
-        template_fname      = './data/template.ply',
-        weight_reg_shape    = 1e-6,
-        weight_reg_expr     = 1e-6,
-        weight_reg_neck_pos = 1e-4,
-        weight_reg_jaw_pos  = 1e-4,
-        weight_reg_eye_pos  = 1e-4,
-        showing=True
-    )
+    # fit_sources(
+    #     [("./vocaset/FaceTalk_170915_00223_TA/sentence01",
+    #       "./vocaset/flame_fitted/FaceTalk_170915_00223_TA_clean/sentence01",
+    #       "./vocaset/flame_fitted/FaceTalk_170915_00223_TA_param/sentence01")],
+    #     tf_model_fname      = './models/generic_model',
+    #     template_fname      = './data/template.ply',
+    #     weight_reg_shape    = 1e-6,
+    #     weight_reg_expr     = 1e-6,
+    #     weight_reg_neck_pos = 1e-4,
+    #     weight_reg_jaw_pos  = 1e-4,
+    #     weight_reg_eye_pos  = 1e-4,
+    #     showing=True
+    # )
