@@ -24,6 +24,8 @@ from psbody.mesh import Mesh
 from psbody.mesh.meshviewer import MeshViewer
 from utils.landmarks import load_binary_pickle, load_embedding, tf_get_model_lmks, create_lmk_spheres
 from tensorflow.contrib.opt import ScipyOptimizerInterface as scipy_pt
+from tensorboard import summary
+
 
 def sample_FLAME(template_fname, tf_model_fname, num_samples):
     '''
@@ -46,12 +48,17 @@ def sample_FLAME(template_fname, tf_model_fname, num_samples):
     with tf.Session() as session:
         saver.restore(session, tf_model_fname)
 
+        merged_summary_op = tf.summary.merge_all()
+        summary_writer = tf.summary.FileWriter(
+            "logs", graph
+        )
+
         # Workaround as existing tf.Variable cannot be retrieved back with tf.get_variable
         tf_trans = [x for x in tf.trainable_variables() if 'trans' in x.name][0]
-        tf_rot = [x for x in tf.trainable_variables() if 'rot' in x.name][0]
-        tf_pose = [x for x in tf.trainable_variables() if 'pose' in x.name][0]
+        tf_rot   = [x for x in tf.trainable_variables() if 'rot' in x.name][0]
+        tf_pose  = [x for x in tf.trainable_variables() if 'pose' in x.name][0]
         tf_shape = [x for x in tf.trainable_variables() if 'shape' in x.name][0]
-        tf_exp = [x for x in tf.trainable_variables() if 'exp' in x.name][0]
+        tf_exp   = [x for x in tf.trainable_variables() if 'exp' in x.name][0]
 
         mv = MeshViewer()
 

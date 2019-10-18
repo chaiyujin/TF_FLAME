@@ -97,140 +97,6 @@ def fit_3D_mesh(target_3d_mesh_fname, template_fname, tf_model_fname, weights, s
         return Mesh(session.run(tf_model), template_mesh.f)
 
 
-def fit_sources(
-    dir_tup_list,
-    tf_model_fname,
-    template_fname,
-    weight_reg_shape,
-    weight_reg_expr,
-    weight_reg_neck_pos,
-    weight_reg_jaw_pos,
-    weight_reg_eye_pos,
-):
-    saver = tf.train.import_meta_graph(tf_model_fname + '.meta')
-
-    graph = tf.get_default_graph()
-    tf_model = graph.get_tensor_by_name(u'vertices:0')
-
-    with tf.Session() as session:
-        saver.restore(session, tf_model_fname)
-
-        template = Mesh(filename=template_fname)
-        tf_src = tf.Variable(tf.zeros(template.v.shape, dtype=tf.float64))
-
-        # get all params
-        tf_trans = [x for x in tf.trainable_variables() if 'trans' in x.name][0]
-        tf_rot   = [x for x in tf.trainable_variables() if 'rot'   in x.name][0]
-        tf_pose  = [x for x in tf.trainable_variables() if 'pose'  in x.name][0]
-        tf_shape = [x for x in tf.trainable_variables() if 'shape' in x.name][0]
-        tf_exp   = [x for x in tf.trainable_variables() if 'exp'   in x.name][0]
-
-        mesh_dist     = tf.reduce_sum(tf.square(tf.subtract(tf_model, tf_src)))
-        neck_pose_reg = tf.reduce_sum(tf.square(tf_pose[:3]))
-        jaw_pose_reg  = tf.reduce_sum(tf.square(tf_pose[3:6]))
-        eye_pose_reg  = tf.reduce_sum(tf.square(tf_pose[6:]))
-        shape_reg     = tf.reduce_sum(tf.square(tf_shape))
-        exp_reg       = tf.reduce_sum(tf.square(tf_exp))
-        reg_term = (
-            weight_reg_neck_pos * neck_pose_reg +
-            weight_reg_jaw_pos  * jaw_pose_reg  +
-            weight_reg_eye_pos  * eye_pose_reg  +
-            weight_reg_shape    * shape_reg     +
-            weight_reg_expr     * exp_reg
-        )
-
-        # optimizers
-        optim_shared_rigid = scipy_pt(
-            loss=mesh_dist,
-            var_list=[tf_trans, tf_rot],
-            method='L-BFGS-B',
-            options={'disp': 0}
-        )
-        optim_shared_all = scipy_pt(
-            loss=mesh_dist+reg_term,
-            var_list=[tf_trans, tf_rot, tf_pose, tf_shape, tf_exp],
-            method='L-BFGS-B',
-            options={'disp': 0}
-        )
-        optim_seq = scipy_pt(
-            loss=mesh_dist+reg_term,
-            var_list=[tf_shape, tf_exp],
-            method='L-BFGS-B', options={'disp': 0, 'maxiter': 100}
-        )
-
-        def _fit_sentence(src_dir, dst_dir, prm_dir, last_speaker):
-            _anchor = os.path.join(dst_dir, "_anchor")
-            if os.path.exists(_anchor):
-                print("-- Skip " + src_dir)
-                return
-            if not os.path.exists(src_dir):
-                print("-- Failed to find " + src_dir)
-                return
-            if not os.path.exists(dst_dir):
-                os.makedirs(dst_dir)
-            if not os.path.exists(prm_dir):
-                os.makedirs(prm_dir)
-
-            ply_files = []
-            for root, _, files in os.walk(src_dir):
-                for f in files:
-                    if os.path.splitext(f)[1] == ".ply":
-                        ply_files.append(os.path.join(root, f))
-            ply_files = sorted(ply_files)
-
-            # get shared
-            src_mesh = Mesh(filename=ply_files[0])
-            session.run(tf.assign(tf_src, src_mesh.v))
-
-            speaker = os.path.basename(os.path.dirname(src_dir))
-
-            if last_speaker != speaker:
-                print("-- clear speaker information")
-                ops = []
-                ops.append(tf_trans.assign(tf.zeros_like(tf_trans)))
-                ops.append(tf_rot  .assign(tf.zeros_like(tf_rot  )))
-                ops.append(tf_pose .assign(tf.zeros_like(tf_pose )))
-                ops.append(tf_shape.assign(tf.zeros_like(tf_shape)))
-                ops.append(tf_exp  .assign(tf.zeros_like(tf_exp  )))
-                session.run(ops)
-
-            print("-- " + speaker + " " + os.path.basename(src_dir))
-            print("  -> fit shared parameters...")
-            optim_shared_rigid.minimize(session)
-            optim_shared_all.minimize(session)
-
-            # save iden
-            np.save(os.path.join(prm_dir, "iden.npy"), tf_shape.eval(), allow_pickle=False)
-
-            progress = tqdm(ply_files)
-            for src_fname in progress:
-                frame = os.path.basename(src_fname)
-                progress.set_description("  -> " + frame)
-                dst_fname = os.path.join(dst_dir, frame)
-                # param filename
-                prm_fname = os.path.join(prm_dir, frame)
-                prm_fname = os.path.splitext(prm_fname)[0] + '_exp.npy'
-
-                src_mesh = Mesh(filename=src_fname)
-                session.run(tf.assign(tf_src, src_mesh.v))
-
-                optim_seq.minimize(session)
-
-                # save expr
-                np.save(prm_fname, tf_exp.eval())
-
-                # save mesh
-                fitting_mesh = Mesh(session.run(tf_model), src_mesh.f)
-                fitting_mesh.write_ply(dst_fname)
-
-            os.system("touch {}".format(_anchor))
-            return speaker
-
-        last_speaker = None
-        for (src, dst, prm) in dir_tup_list:
-            last_speaker = _fit_sentence(src, dst, prm, last_speaker)
-
-
 def run_corresponding_mesh_fitting():
     # Path of the Tensorflow FLAME model
     tf_model_fname = './models/generic_model'
@@ -266,6 +132,200 @@ def run_corresponding_mesh_fitting():
         os.makedirs(os.path.dirname(out_mesh_fname))
 
     result_mesh.write_ply(out_mesh_fname)
+
+
+g_mv = None
+
+
+def fit_sources(
+    dir_tup_list,
+    tf_model_fname,
+    template_fname,
+    weight_reg_shape,
+    weight_reg_expr,
+    weight_reg_neck_pos,
+    weight_reg_jaw_pos,
+    weight_reg_eye_pos,
+    showing=False
+):
+    global g_mv
+    if showing:
+        g_mv = MeshViewer()
+
+    saver = tf.train.import_meta_graph(tf_model_fname + '.meta')
+
+    graph = tf.get_default_graph()
+    tf_model = graph.get_tensor_by_name(u'vertices:0')
+
+    with tf.Session() as session:
+        saver.restore(session, tf_model_fname)
+
+        template = Mesh(filename=template_fname)
+        tf_src = tf.Variable(tf.zeros(template.v.shape, dtype=tf.float64))
+
+        # get all params
+        tf_trans = [x for x in tf.trainable_variables() if 'trans' in x.name][0]
+        tf_rot   = [x for x in tf.trainable_variables() if 'rot'   in x.name][0]
+        tf_pose  = [x for x in tf.trainable_variables() if 'pose'  in x.name][0]
+        tf_shape = [x for x in tf.trainable_variables() if 'shape' in x.name][0]
+        tf_exp   = [x for x in tf.trainable_variables() if 'exp'   in x.name][0]
+
+        def _save_state(*names, **kwargs):
+            state = dict()
+            if "trans" in names: state["trans"] = tf_trans.eval()
+            if "rot"   in names: state["rot"]   = tf_rot.eval()
+            if "pose"  in names: state["pose"]  = tf_pose.eval()
+            if "shape" in names: state["shape"] = tf_shape.eval()
+            if "exp"   in names: state["exp"]   = tf_exp.eval()
+            if kwargs.get("set_zero", False):
+                _zero_state(*names)
+            return state
+
+        def _load_state(state):
+            ops = []
+            if "trans" in state: ops.append(tf_trans.assign(state["trans"]))
+            if "rot"   in state: ops.append(tf_rot.assign  (state["rot"]  ))
+            if "pose"  in state: ops.append(tf_pose.assign (state["pose"] ))
+            if "shape" in state: ops.append(tf_shape.assign(state["shape"]))
+            if "exp"   in state: ops.append(tf_exp.assign  (state["exp"]  ))
+            session.run(ops)
+
+        def _zero_state(*names):
+            ops = []
+            if "trans" in names: ops.append(tf_trans.assign(tf.zeros_like(tf_trans)))
+            if "rot"   in names: ops.append(tf_rot  .assign(tf.zeros_like(tf_rot  )))
+            if "pose"  in names: ops.append(tf_pose .assign(tf.zeros_like(tf_pose )))
+            if "shape" in names: ops.append(tf_shape.assign(tf.zeros_like(tf_shape)))
+            if "exp"   in names: ops.append(tf_exp  .assign(tf.zeros_like(tf_exp  )))
+            session.run(ops)
+
+        mesh_dist     = tf.reduce_sum(tf.square(tf.subtract(tf_model, tf_src)))
+        neck_pose_reg = tf.reduce_sum(tf.square(tf_pose[:3]))
+        jaw_pose_reg  = tf.reduce_sum(tf.square(tf_pose[3:6]))
+        eye_pose_reg  = tf.reduce_sum(tf.square(tf_pose[6:]))
+        shape_reg     = tf.reduce_sum(tf.square(tf_shape))
+        exp_reg       = tf.reduce_sum(tf.square(tf_exp))
+        reg_term = (
+            weight_reg_neck_pos * neck_pose_reg +
+            weight_reg_jaw_pos  * jaw_pose_reg  +
+            weight_reg_eye_pos  * eye_pose_reg  +
+            weight_reg_shape    * shape_reg     +
+            weight_reg_expr     * exp_reg
+        )
+
+        # optimizers
+        optim_shared_rigid = scipy_pt(
+            loss=mesh_dist,
+            var_list=[tf_trans, tf_rot],
+            method='L-BFGS-B',
+            options={'disp': 0}
+        )
+        optim_shared_all = scipy_pt(
+            loss=mesh_dist+reg_term,
+            var_list=[tf_trans, tf_rot, tf_pose, tf_shape, tf_exp],
+            method='L-BFGS-B',
+            options={'disp': 0, 'maxiter': 5000}
+        )
+        optim_seq = scipy_pt(
+            loss=mesh_dist+reg_term,
+            var_list=[tf_shape, tf_exp],
+            method='L-BFGS-B', options={'disp': 0, 'maxiter': 50}
+        )
+
+        def _fit_sentence(src_dir, dst_dir, prm_dir, last_speaker):
+            _anchor = os.path.join(dst_dir, "_anchor")
+            if os.path.exists(_anchor):
+                print("- Skip " + src_dir)
+                return
+            if not os.path.exists(src_dir):
+                print("- Failed to find " + src_dir)
+                return
+            if not os.path.exists(dst_dir): os.makedirs(dst_dir)
+            if not os.path.exists(prm_dir): os.makedirs(prm_dir)
+
+            ply_files = []
+            for root, _, files in os.walk(src_dir):
+                for f in files:
+                    if os.path.splitext(f)[1] == ".ply":
+                        ply_files.append(os.path.join(root, f))
+            ply_files = sorted(ply_files)
+
+            # get shared
+            src_mesh = Mesh(filename=ply_files[0])
+            session.run(tf.assign(tf_src, src_mesh.v))
+
+            speaker = os.path.basename(os.path.dirname(src_dir))
+
+            if last_speaker != speaker:
+                print("- clear speaker information")
+                _zero_state("trans", "rot", "pose", "shape", "exp")
+            else:
+                _zero_state("exp")
+
+            stt_dir = os.path.join(os.path.dirname(dst_dir), "state")
+            if os.path.exists(stt_dir):
+                state_dict = dict(
+                    trans  = np.load(os.path.join(stt_dir, "trans.npy")),
+                    rot    = np.load(os.path.join(stt_dir, "rot.npy")),
+                    pose   = np.load(os.path.join(stt_dir, "pose.npy")),
+                    shape  = np.load(os.path.join(stt_dir, "shape.npy")),
+                )
+                _load_state(state_dict)
+
+                fitting_mesh = Mesh(session.run(tf_model), src_mesh.f)
+                fitting_mesh.write_ply(os.path.join(stt_dir, "zero.ply"))
+
+            print("- " + speaker + " " + os.path.basename(src_dir))
+            print("  -> fit shared parameters...")
+            optim_shared_rigid.minimize(session)
+            optim_shared_all.minimize(session)
+
+            fitting_mesh = Mesh(session.run(tf_model), src_mesh.f)
+            fitting_mesh.write_ply(os.path.join(stt_dir, "expr.ply"))
+
+            if not os.path.exists(stt_dir): os.makedirs(stt_dir)
+            np.save(os.path.join(stt_dir, "trans.npy"), tf_trans.eval(), allow_pickle=False)
+            np.save(os.path.join(stt_dir, "rot.npy"),   tf_rot.eval(),   allow_pickle=False)
+            np.save(os.path.join(stt_dir, "pose.npy"),  tf_pose.eval(),  allow_pickle=False)
+            np.save(os.path.join(stt_dir, "shape.npy"), tf_shape.eval(), allow_pickle=False)
+
+            progress = tqdm(ply_files)
+            for src_fname in progress:
+                frame = os.path.basename(src_fname)
+                progress.set_description("  -> " + frame)
+                dst_fname = os.path.join(dst_dir, frame)
+                # param filename
+                prm_fname = os.path.join(prm_dir, frame)
+                exp_fname = os.path.splitext(prm_fname)[0] + '_exp.npy'
+                idn_fname = os.path.splitext(prm_fname)[0] + '_idn.npy'
+
+                src_mesh = Mesh(filename=src_fname)
+                session.run(tf.assign(tf_src, src_mesh.v))
+
+                optim_seq.minimize(session)
+
+                # save expr
+                np.save(exp_fname, tf_exp.eval())
+                np.save(idn_fname, tf_shape.eval())
+
+                # state_dict = _save_state("trans", "rot", "pose", "shape", set_zero=True)
+
+                # save mesh
+                fitting_mesh = Mesh(session.run(tf_model), src_mesh.f)
+                fitting_mesh.write_ply(dst_fname)
+
+                # _load_state(state_dict)
+                # print(tf_shape.eval())
+
+                if showing:
+                    g_mv.set_static_meshes([fitting_mesh])
+
+            os.system("touch {}".format(_anchor))
+            return speaker
+
+        last_speaker = None
+        for (src, dst, prm) in dir_tup_list:
+            last_speaker = _fit_sentence(src, dst, prm, last_speaker)
 
 
 def run_vocaset():
@@ -309,17 +369,20 @@ def run_vocaset():
 
 
 if __name__ == '__main__':
-    run_vocaset()
+    # run_vocaset()
+
     # run_corresponding_mesh_fitting()
-    # fit_sources(
-    #     [("./vocaset/FaceTalk_170915_00223_TA/sentence01/",
-    #       "./vocaset/FaceTalk_170915_00223_TA_clean/sentence01/",
-    #       "./vocaset/FaceTalk_170915_00223_TA_param/sentence01/")],
-    #     tf_model_fname='./models/generic_model',
-    #     template_fname='./data/template.ply',
-    #     weight_reg_shape=1e-4,
-    #     weight_reg_expr=1e-7,
-    #     weight_reg_neck_pos=1e-4,
-    #     weight_reg_jaw_pos=1e-4,
-    #     weight_reg_eye_pos=1e-4,
-    # )
+
+    fit_sources(
+        [("./vocaset/FaceTalk_170915_00223_TA/sentence01",
+          "./vocaset/flame_fitted/FaceTalk_170915_00223_TA_clean/sentence01",
+          "./vocaset/flame_fitted/FaceTalk_170915_00223_TA_param/sentence01")],
+        tf_model_fname      = './models/generic_model',
+        template_fname      = './data/template.ply',
+        weight_reg_shape    = 1e-6,
+        weight_reg_expr     = 1e-6,
+        weight_reg_neck_pos = 1e-4,
+        weight_reg_jaw_pos  = 1e-4,
+        weight_reg_eye_pos  = 1e-4,
+        showing=True
+    )
