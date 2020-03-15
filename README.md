@@ -8,14 +8,23 @@
 
 FLAME combines a linear identity shape space (trained from 3800 scans of human heads) with an articulated neck, jaw, and eyeballs, pose-dependent corrective blendshapes, and additional global expression blendshapes. For details please about the model, please see the [scientific publication](https://ps.is.tuebingen.mpg.de/uploads_file/attachment/attachment/400/paper.pdf) and the [supplementary video](https://youtu.be/36rPTkhiJTM).
 
+### Content
+
+This repository demonstrates how to 
+1) sample 3D face meshes 
+2) fit the 3D model to 2D landmarks
+3) fit the 3D model to 3D landmarks 
+4) fit the 3D model to registered 3D meshes
+5) how to generate templates for speech-driven facial animation ([VOCA](https://github.com/TimoBolkart/voca))
 
 ### Set-up
 
-The code uses Python 2.7 and it was tested on Tensorflow 1.12.0.
+The has been tested with Python3.6, using Tensorflow 1.15.2.
 
 Install pip and virtualenv
+
 ```
-sudo apt-get install python-pip python-virtualenv
+sudo apt-get install python3-pip python3-venv
 ```
 
 Clone the git project:
@@ -26,7 +35,7 @@ $ git clone https://github.com/TimoBolkart/TF_FLAME.git
 Set up virtual environment:
 ```
 $ mkdir <your_home_dir>/.virtualenvs
-$ virtualenv --no-site-packages <your_home_dir>/.virtualenvs/flame
+$ python3 -m venv <your_home_dir>/.virtualenvs/flame
 ```
 
 Activate virtual environment:
@@ -35,17 +44,26 @@ $ cd TF_FLAME
 $ source <your_home_dir>/flame/bin/activate
 ```
 
-The requirements (including tensorflow) can be installed using:
+Install mesh processing libraries from [MPI-IS/mesh](https://github.com/MPI-IS/mesh) within the virtual environment.
+
+Make sure your pip version is up-to-date:
+```
+pip install -U pip
+```
+
+Other requirements (including tensorflow) can be installed using:
 ```
 pip install -r requirements.txt
 ```
 
-Install mesh processing libraries from [MPI-IS/mesh](https://github.com/MPI-IS/mesh) within the virtual environment.
-
+The visualization uses OpenGL which can be installed using:
+```
+sudo apt-get install python-opengl
+```
 
 ### Data
 
-Download Tensorflow FLAME model from [MPI-IS/FLAME](http://flame.is.tue.mpg.de/).<br/>
+Download the FLAME model from [MPI-IS/FLAME](http://flame.is.tue.mpg.de/). You need to sign up and agree to the model license for access to the model and the data.<br/>
 
 
 ### Demo
@@ -60,6 +78,26 @@ This demo introduces the different FLAME parameters (i.e. pose, shape, expressio
 python sample_FLAME.py
 ```
 
+##### Fit 2D landmarks
+
+This demo demonstrates how to fit FLAME to 2D landmarks. Corresponding 2D landmarks can for instance be automatically predicted using [2D-FAN Torch](https://github.com/1adrianb/2D-and-3D-face-alignment) or [2D-FAN Pytorch](https://github.com/1adrianb/face-alignment). (The test images are taken from CelebA-HQ) 
+```
+python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --template_fname './data/template.ply' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ00088.jpeg' --target_lmk_path './data/imgHQ00088_lmks.npy' --out_path './results'
+python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --template_fname './data/template.ply' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ00095.jpeg' --target_lmk_path './data/imgHQ00095_lmks.npy' --out_path './results'
+python fit_2D_landmarks.py --model_fname './models/male_model.pkl' --template_fname './data/template.ply' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ00039.jpeg' --target_lmk_path './data/imgHQ00039_lmks.npy' --out_path './results'
+python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --template_fname './data/template.ply' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ01148.jpeg' --target_lmk_path './data/imgHQ01148_lmks.npy' --out_path './results'
+
+```
+
+##### Create textured mesh
+
+This demo demonstrates how to create a textured mesh in FLAME topology by projecting an image onto the fitted FLAME mesh (i.e. obtained by fitting FLAME to 2D landmarks). (The test images are taken from CelebA-HQ)
+```
+python build_texture_from_image.py --source_img './data/imgHQ00088.jpeg' --target_mesh './results/imgHQ00088.obj' --target_scale './results/imgHQ00088_scale.npy' --texture_mapping './data/texture_data.npy' --out_path './results'
+python build_texture_from_image.py --source_img './data/imgHQ00095.jpeg' --target_mesh './results/imgHQ00095.obj' --target_scale './results/imgHQ00095_scale.npy' --texture_mapping './data/texture_data.npy' --out_path './results'
+python build_texture_from_image.py --source_img './data/imgHQ00039.jpeg' --target_mesh './results/imgHQ00039.obj' --target_scale './results/imgHQ00039_scale.npy' --texture_mapping './data/texture_data.npy' --out_path './results'
+python build_texture_from_image.py --source_img './data/imgHQ01148.jpeg' --target_mesh './results/imgHQ01148.obj' --target_scale './results/imgHQ01148_scale.npy' --texture_mapping './data/texture_data.npy' --out_path './results'
+```
 
 ##### Fit 3D landmarks
 
@@ -118,4 +156,6 @@ When using this code in a scientific publication, please cite
 
 ## Acknowledgement
 
+The Tensorflow implementation used in this project is adapted from [HMR](https://github.com/akanazawa/hmr). We thank Angjoo Kanazawa for making this code available.
 We thank Ahmed Osman for support with Tensorflow.
+
