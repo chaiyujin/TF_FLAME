@@ -127,7 +127,23 @@ def fit_lmk2d(target_img, target_2d_lmks, template_fname, model_fname, lmk_face_
 
         print('Fitting done')
         np_verts, np_scale = session.run([tf_model, tf_scale])
-        return Mesh(np_verts, template_mesh.f), np_scale
+
+        def _get_verts(expr):
+            assign_expr = tf.assign(tf_exp, expr[np.newaxis,:])
+            session.run([assign_expr])
+            _verts, _scale = session.run([tf_model, tf_scale])
+            return _verts
+
+        expr_basis = []
+        neutral_verts = _get_verts(np.zeros((100), np.float64))
+        for i in range(100):
+            expr_i = np.zeros((100), np.float64)
+            expr_i[i] = 1
+            verts_i = _get_verts(expr_i) - neutral_verts
+            expr_basis.append(verts_i.flatten())
+        expr_basis = np.asarray(expr_basis, np.float32).transpose(1, 0)
+
+        return Mesh(np_verts, template_mesh.f), np_scale, expr_basis
 
 
 def run_2d_lmk_fitting(model_fname, template_fname, flame_lmk_path, texture_mapping, target_img_path, target_lmk_path, out_path):
@@ -170,7 +186,8 @@ def run_2d_lmk_fitting(model_fname, template_fname, flame_lmk_path, texture_mapp
     # Weight of the eyeball pose (i.e. eyeball rotations) regularizer
     weights['eyeballs_pose'] = 10.0
 
-    result_mesh, result_scale = fit_lmk2d(target_img, lmk_2d, template_fname, model_fname, lmk_face_idx, lmk_b_coords, weights)
+    result_mesh, result_scale, expr_basis = fit_lmk2d(target_img, lmk_2d, template_fname, model_fname, lmk_face_idx, lmk_b_coords, weights)
+    np.save(os.path.join(out_path, "expr_basis.npy"), expr_basis.astype(np.float32))
 
     if sys.version_info >= (3, 0):
         texture_data = np.load(texture_mapping, allow_pickle=True, encoding='latin1').item()
@@ -178,16 +195,19 @@ def run_2d_lmk_fitting(model_fname, template_fname, flame_lmk_path, texture_mapp
         texture_data = np.load(texture_mapping, allow_pickle=True).item()
     texture_map = compute_texture_map(target_img, result_mesh, result_scale, texture_data)
 
-    out_mesh_fname = os.path.join(out_path, os.path.splitext(os.path.basename(target_img_path))[0] + '.obj')
-    out_img_fname = os.path.join(out_path, os.path.splitext(os.path.basename(target_img_path))[0] + '.png')
+    out_mesh_fname = os.path.join(out_path,  'template.obj')
+    out_img_fname = os.path.join(out_path,  'template.png')
 
     cv2.imwrite(out_img_fname, texture_map)
     result_mesh.set_vertex_colors('white')
     result_mesh.vt = texture_data['vt']
     result_mesh.ft = texture_data['ft']
     result_mesh.set_texture_image(out_img_fname)
+    # move to center
+    result_mesh.v -= result_mesh.v.mean(axis=0)
+
     result_mesh.write_obj(out_mesh_fname)
-    np.save(os.path.join(out_path, os.path.splitext(os.path.basename(target_img_path))[0] + '_scale.npy'), result_scale)
+    np.save(os.path.join(out_path, 'template_scale.npy'), result_scale)
 
     mv = MeshViewers(shape=[1,2], keepalive=True)
     mv[0][0].set_static_meshes([Mesh(result_mesh.v, result_mesh.f)])
