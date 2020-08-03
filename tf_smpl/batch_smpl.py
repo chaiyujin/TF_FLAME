@@ -1,9 +1,5 @@
 """ 
 Tensorflow SMPL implementation as batch.
-Specify joint types:
-'coco': Returns COCO+ 19 joints
-'lsp': Returns H3.6M-LSP 14 joints
-Note: To get original smpl joints, use self.J_transformed
 """
 
 from __future__ import absolute_import
@@ -36,6 +32,7 @@ class SMPL(object):
                                       name='v_template',
                                       dtype=self.dtype,
                                       trainable=False)
+        self.f = dd['f']
 
         # Size of mesh [Number of vertices, 3]
         self.size = [self.v_template.shape[0].value, 3]
@@ -48,7 +45,7 @@ class SMPL(object):
         shapedir = np.reshape(undo_chumpy(dd['shapedirs']), [-1, self.num_betas]).T
         self.shapedirs = tf.Variable(shapedir, name='shapedirs', dtype=self.dtype, trainable=False)
 
-        # Regressor for joint locations given shape - 6890 x 24
+        # Regressor for joint locations given shape - num_verts x num_joints
         self.J_regressor = tf.Variable(dd['J_regressor'].T.todense(),
                                        name="J_regressor",
                                        dtype=self.dtype,
@@ -67,6 +64,7 @@ class SMPL(object):
                                    name='lbs_weights',
                                    dtype=self.dtype,
                                    trainable=False)
+
 
     def __call__(self, trans, beta, theta, name=''):
         """

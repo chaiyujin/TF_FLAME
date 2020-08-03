@@ -8,6 +8,9 @@
 
 FLAME combines a linear identity shape space (trained from 3800 scans of human heads) with an articulated neck, jaw, and eyeballs, pose-dependent corrective blendshapes, and additional global expression blendshapes. For details please about the model, please see the [scientific publication](https://ps.is.tuebingen.mpg.de/uploads_file/attachment/attachment/400/paper.pdf) and the [supplementary video](https://youtu.be/36rPTkhiJTM).
 
+See also [FLAME PyTorch](https://github.com/soubhiksanyal/FLAME_PyTorch) or the [FLAME photometric optimization](https://github.com/HavenFeng/photometric_optimization) repositories.
+
+
 ### Content
 
 This repository demonstrates how to 
@@ -15,7 +18,8 @@ This repository demonstrates how to
 2) fit the 3D model to 2D landmarks
 3) fit the 3D model to 3D landmarks 
 4) fit the 3D model to registered 3D meshes
-5) how to generate templates for speech-driven facial animation ([VOCA](https://github.com/TimoBolkart/voca))
+5) sample the texture space
+6) how to generate templates for speech-driven facial animation ([VOCA](https://github.com/TimoBolkart/voca))
 
 ### Set-up
 
@@ -63,7 +67,7 @@ sudo apt-get install python-opengl
 
 ### Data
 
-Download the FLAME model from [MPI-IS/FLAME](http://flame.is.tue.mpg.de/). You need to sign up and agree to the model license for access to the model and the data.<br/>
+Download the FLAME model and the MPI texture space from [MPI-IS/FLAME](http://flame.is.tue.mpg.de/). You need to sign up and agree to the model license for access to the model and the data. Further, download the [AlbedoMM (CVPR 2020)](https://github.com/waps101/AlbedoMM) texture space for FLAME.<br/>
 
 
 ### Demo
@@ -75,19 +79,21 @@ We provide demos to i) draw random samples from FLAME to demonstrate how to edit
 
 This demo introduces the different FLAME parameters (i.e. pose, shape, expression, and global transformation) of the FLAME model by generating random sample meshes. Please note that this does not demonstrate how to get realistic 3D face samples from the model.
 ```
-python sample_FLAME.py
+python sample_FLAME.py --option sample_FLAME --model_fname './models/generic_model.pkl' --num_samples 5 --out_path './FLAME_samples'
 ```
+By default, running this demo uses an OpenGL-based mesh viewer viewer to visualize the samples. If this causes any problems, try running the demo with the additional flag --visualize False to disable the visualization.
 
 ##### Fit 2D landmarks
 
 This demo demonstrates how to fit FLAME to 2D landmarks. Corresponding 2D landmarks can for instance be automatically predicted using [2D-FAN Torch](https://github.com/1adrianb/2D-and-3D-face-alignment) or [2D-FAN Pytorch](https://github.com/1adrianb/face-alignment). (The test images are taken from CelebA-HQ) 
 ```
-python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --template_fname './data/template.ply' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ00088.jpeg' --target_lmk_path './data/imgHQ00088_lmks.npy' --out_path './results'
-python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --template_fname './data/template.ply' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ00095.jpeg' --target_lmk_path './data/imgHQ00095_lmks.npy' --out_path './results'
-python fit_2D_landmarks.py --model_fname './models/male_model.pkl' --template_fname './data/template.ply' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ00039.jpeg' --target_lmk_path './data/imgHQ00039_lmks.npy' --out_path './results'
-python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --template_fname './data/template.ply' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ01148.jpeg' --target_lmk_path './data/imgHQ01148_lmks.npy' --out_path './results'
+python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ00088.jpeg' --target_lmk_path './data/imgHQ00088_lmks.npy' --out_path './results'
+python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ00095.jpeg' --target_lmk_path './data/imgHQ00095_lmks.npy' --out_path './results'
+python fit_2D_landmarks.py --model_fname './models/male_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ00039.jpeg' --target_lmk_path './data/imgHQ00039_lmks.npy' --out_path './results'
+python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ01148.jpeg' --target_lmk_path './data/imgHQ01148_lmks.npy' --out_path './results'
 
 ```
+By default, running the demo opens a window to visualize the fitting progress. This will fail if running the code remotely. In this case try running the demo with an additional flag ```--visualize False``` to disable the visualization.
 
 ##### Create textured mesh
 
@@ -114,14 +120,25 @@ python fit_3D_mesh.py
 ```
 Note that this demo to date does not support registering arbitrary 3D face scans. This requires replacing the vertex loss function by some differentiable scan-to-mesh or mesh-to-scan distance.
 
+##### Sample texture space
+
+Two texture spaces are available for FLAME, the [MPI texture space](https://flame.is.tue.mpg.de/downloads) and [AlbedoMM](https://github.com/waps101/AlbedoMM). This demo generates FLAME meshes with textures randomly sampled from the MPI texture space (download [here](https://flame.is.tue.mpg.de/downloads))
+```
+python sample_texture.py --model_fname './models/generic_model.pkl' --texture_fname './models/FLAME_texture.npz' --num_samples 5 --out_path './texture_samples_MPI'
+```
+
+Randomly sample textures from the [AlbedoMM](http://openaccess.thecvf.com/content_CVPR_2020/papers/Smith_A_Morphable_Face_Albedo_Model_CVPR_2020_paper.pdf) texture space (download  albedoModel2020_FLAME_albedoPart.npz [here](https://github.com/waps101/AlbedoMM/releases))
+```
+python sample_texture.py --model_fname './models/generic_model.pkl' --texture_fname './models/albedoModel2020_FLAME_albedoPart.npz' --num_samples 5 --out_path './texture_samples_AlbedoMM'
+```
 
 ##### Generate VOCA template
 
 [VOCA](https://github.com/TimoBolkart/voca) is a framework to animate a static face mesh in FLAME topology from speech. This demo samples the FLAME identity space to generate new templates that can then be animated with VOCA. 
 ```
-python sample_FLAME.py --option sample_VOCA_template
+python sample_FLAME.py --option sample_VOCA_template --model_fname './models/generic_model.pkl' --num_samples 5 --out_path './FLAME_samples'
 ```
-
+By default, running this demo uses an OpenGL-based mesh viewer viewer to visualize the samples. If this causes any problems, try running the demo with the additional flag --visualize False to disable the visualization.
 
 ### Supported projects
 

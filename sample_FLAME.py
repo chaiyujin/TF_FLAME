@@ -29,8 +29,17 @@ from tf_smpl.batch_smpl import SMPL
 from tensorflow.contrib.opt import ScipyOptimizerInterface as scipy_pt
 from tensorboard import summary
 
+def str2bool(val):
+    if isinstance(val, bool):
+        return val
+    elif isinstance(val, str):
+        if val.lower() in ['true', 't', 'yes', 'y']:
+            return True
+        elif val.lower() in ['false', 'f', 'no', 'n']:
+            return False
+    return False
 
-def sample_FLAME(template_fname, model_fname, num_samples, output_dir):
+def sample_FLAME(model_fname, num_samples, out_path, visualize, sample_VOCA_template=False):
     '''
     Sample the FLAME model to demonstrate how to vary the model parameters.FLAME has parameters to
         - model identity-dependent shape variations (paramters: shape),
@@ -38,11 +47,12 @@ def sample_FLAME(template_fname, model_fname, num_samples, output_dir):
         - model facial expressions, i.e. all expression motion that does not involve opening the mouth (paramters: exp)
         - global translation (paramters: trans)
         - global rotation (paramters: rot)
-    :param template_fname:      template mesh in FLAME topology (only the face information are used)
-    :param model_fname:         saved FLAME model
+    :param model_fname              saved FLAME model
+    :param num_samples              number of samples
+    :param out_path                 output path to save the generated templates (no templates are saved if path is empty)
+    :param visualize                visualize samples
+    :param sample_VOCA_template     sample template in 'zero pose' that can be used e.g. for speech-driven animation in VOCA
     '''
-
-    template_mesh = Mesh(filename=template_fname)
 
     tf_trans = tf.Variable(np.zeros((1,3)), name="trans", dtype=tf.float64, trainable=True)
     tf_rot = tf.Variable(np.zeros((1,3)), name="pose", dtype=tf.float64, trainable=True)
@@ -57,89 +67,50 @@ def sample_FLAME(template_fname, model_fname, num_samples, output_dir):
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
 
-        mv = MeshViewer()
-
+        if visualize:
+            mv = MeshViewer()
         for i in range(num_samples):
-            # assign_trans = tf.assign(tf_trans, np.random.randn(3)[np.newaxis,:])
-            # assign_rot = tf.assign(tf_rot, np.random.randn(3)[np.newaxis,:] * 0.03)
-            # assign_pose = tf.assign(tf_pose, np.random.randn(12)[np.newaxis,:] * 0.03)
-            # assign_exp = tf.assign(tf_exp, np.random.randn(100)[np.newaxis,:] * 0.5)
-            assign_shape = tf.assign(tf_shape, np.random.randn(300)[np.newaxis,:] * 1.0)
-            # session.run([assign_trans, assign_rot, assign_pose, assign_shape, assign_exp])
-            session.run([assign_shape])
+            if sample_VOCA_template:
+                assign_shape = tf.assign(tf_shape, np.hstack((np.random.randn(100), np.zeros(200)))[np.newaxis,:])
+                session.run([assign_shape])
+                out_fname = os.path.join(out_path, 'VOCA_template_%02d.ply' % (i+1))
+            else:
+                # assign_trans = tf.assign(tf_trans, np.random.randn(3)[np.newaxis,:])
+                assign_rot = tf.assign(tf_rot, np.random.randn(3)[np.newaxis,:] * 0.03)
+                assign_pose = tf.assign(tf_pose, np.random.randn(12)[np.newaxis,:] * 0.02)
+                assign_shape = tf.assign(tf_shape, np.hstack((np.random.randn(100), np.zeros(200)))[np.newaxis,:])
+                assign_exp = tf.assign(tf_exp, np.hstack((0.5*np.random.randn(50), np.zeros(50)))[np.newaxis,:])
+                session.run([assign_rot, assign_pose, assign_shape, assign_exp])
+                out_fname = os.path.join(out_path, 'FLAME_sample_%02d.ply' % (i+1))
 
-            Mesh(session.run(tf_model), template_mesh.f).write_obj(os.path.join(output_dir, "flame_%02d.obj"%i))
-            # mv.set_dynamic_meshes([Mesh(session.run(tf_model), template_mesh.f)], blocking=True)
-            # six.moves.input('Press key to continue')
+            sample_mesh = Mesh(session.run(tf_model), smpl.f)
+            if visualize:
+                mv.set_dynamic_meshes([sample_mesh], blocking=True)
+                key = six.moves.input('Press (s) to save sample, any other key to continue ')
+                if key == 's':
+                    sample_mesh.write_ply(out_fname)
+            else:
+                sample_mesh.write_ply(out_fname)
 
-def sample_VOCA_template(template_fname, model_fname, out_mesh_fname):
-    '''
-    VOCA animates static templates in FLAME topology. Such templates can be obtained by sampling the FLAME shape space.
-    This function randomly samples the FLAME identity shape space to generate new templates.
-    :param template_fname:  template mesh in FLAME topology (only the face information are used)
-    :param model_fname:     saved FLAME model
-    :param out_mesh_fname:  filename of the VOCA template
-    :return:
-    '''
+def main(args):
+    if not os.path.exists(args.model_fname):
+        print('FLAME model not found - %s' % args.model_fname)
+        return
+    if not os.path.exists(args.out_path):
+        os.makedirs(args.out_path)
+    if args.option == 'sample_FLAME':
+        sample_FLAME(args.model_fname, int(args.num_samples), args.out_path, str2bool(args.visualize), sample_VOCA_template=False)
+    else:
+        sample_FLAME(args.model_fname, int(args.num_samples), args.out_path, str2bool(args.visualize), sample_VOCA_template=True)
 
-    template_mesh = Mesh(filename=template_fname)
-
-    tf_trans = tf.Variable(np.zeros((1,3)), name="trans", dtype=tf.float64, trainable=True)
-    tf_rot = tf.Variable(np.zeros((1,3)), name="pose", dtype=tf.float64, trainable=True)
-    tf_pose = tf.Variable(np.zeros((1,12)), name="pose", dtype=tf.float64, trainable=True)
-    tf_shape = tf.Variable(np.zeros((1,300)), name="shape", dtype=tf.float64, trainable=True)
-    tf_exp = tf.Variable(np.zeros((1,100)), name="expression", dtype=tf.float64, trainable=True)
-    smpl = SMPL(model_fname)
-    tf_model = tf.squeeze(smpl(tf_trans,
-                               tf.concat((tf_shape, tf_exp), axis=-1),
-                               tf.concat((tf_rot, tf_pose), axis=-1)))
-
-    with tf.Session() as session:
-        session.run(tf.global_variables_initializer())
-
-        assign_shape = tf.assign(tf_shape, np.hstack((np.random.randn(100), np.zeros(200)))[np.newaxis,:])
-        session.run([assign_shape])
-
-        Mesh(session.run(tf_model), template_mesh.f).write_ply(out_mesh_fname)
-
-def draw_random_samples():
-    # Path of the Tensorflow FLAME model
-    model_fname = './models/generic_model.pkl'
-    # model_fname = './models/female_model.pkl'
-    # model_fname = './models/male_model.pkl'
-
-    # Path of a tempalte mesh in FLAME topology
-    template_fname = './data/template.ply'
-    # Number of samples
-    num_samples = 10
-
-    if not os.path.exists("./meshes"):
-        os.makedirs("./meshes")
-    sample_FLAME(template_fname, model_fname, num_samples, "./meshes")
-
-def draw_VOCA_template_sample():
-    # Path of the Tensorflow FLAME model
-    model_fname = './models/generic_model.pkl'
-    # model_fname = './models/female_model.pkl'
-    # model_fname = './models/male_model.pkl'
-
-    # Path of a tempalte mesh in FLAME topology
-    template_fname = './data/template.ply'
-    # Output mesh path
-    out_mesh_fname = './FLAME_samples/voca_template.ply'
-
-    if not os.path.exists(os.path.dirname(out_mesh_fname)):
-        os.makedirs(os.path.dirname(out_mesh_fname))
-
-    sample_VOCA_template(template_fname, model_fname, out_mesh_fname)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Sample FLAME shape space')
     parser.add_argument('--option', default='sample_FLAME', help='sample random FLAME meshes or VOCA templates')
-
+    parser.add_argument('--model_fname', default='./models/generic_model.pkl', help='Path of the FLAME model')
+    parser.add_argument('--num_samples', default='5', help='Number of samples')
+    parser.add_argument('--out_path', default='./FLAME_samples', help='Output path')
+    parser.add_argument('--visualize', default='True', help='Visualize fitting progress and final fitting result')
     args = parser.parse_args()
-    option = args.option
-    if option == 'sample_VOCA_template':
-        draw_VOCA_template_sample()
-    else:
-        draw_random_samples()
+    main(args)
+
