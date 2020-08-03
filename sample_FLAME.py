@@ -30,7 +30,7 @@ from tensorflow.contrib.opt import ScipyOptimizerInterface as scipy_pt
 from tensorboard import summary
 
 
-def sample_FLAME(template_fname, model_fname, num_samples):
+def sample_FLAME(template_fname, model_fname, num_samples, output_dir):
     '''
     Sample the FLAME model to demonstrate how to vary the model parameters.FLAME has parameters to
         - model identity-dependent shape variations (paramters: shape),
@@ -60,15 +60,17 @@ def sample_FLAME(template_fname, model_fname, num_samples):
         mv = MeshViewer()
 
         for i in range(num_samples):
-            assign_trans = tf.assign(tf_trans, np.random.randn(3)[np.newaxis,:])
-            assign_rot = tf.assign(tf_rot, np.random.randn(3)[np.newaxis,:] * 0.03)
-            assign_pose = tf.assign(tf_pose, np.random.randn(12)[np.newaxis,:] * 0.03)
+            # assign_trans = tf.assign(tf_trans, np.random.randn(3)[np.newaxis,:])
+            # assign_rot = tf.assign(tf_rot, np.random.randn(3)[np.newaxis,:] * 0.03)
+            # assign_pose = tf.assign(tf_pose, np.random.randn(12)[np.newaxis,:] * 0.03)
+            # assign_exp = tf.assign(tf_exp, np.random.randn(100)[np.newaxis,:] * 0.5)
             assign_shape = tf.assign(tf_shape, np.random.randn(300)[np.newaxis,:] * 1.0)
-            assign_exp = tf.assign(tf_exp, np.random.randn(100)[np.newaxis,:] * 0.5)
-            session.run([assign_trans, assign_rot, assign_pose, assign_shape, assign_exp])
+            # session.run([assign_trans, assign_rot, assign_pose, assign_shape, assign_exp])
+            session.run([assign_shape])
 
-            mv.set_dynamic_meshes([Mesh(session.run(tf_model), template_mesh.f)], blocking=True)
-            six.moves.input('Press key to continue')
+            Mesh(session.run(tf_model), template_mesh.f).write_obj(os.path.join(output_dir, "flame_%02d.obj"%i))
+            # mv.set_dynamic_meshes([Mesh(session.run(tf_model), template_mesh.f)], blocking=True)
+            # six.moves.input('Press key to continue')
 
 def sample_VOCA_template(template_fname, model_fname, out_mesh_fname):
     '''
@@ -111,7 +113,9 @@ def draw_random_samples():
     # Number of samples
     num_samples = 10
 
-    sample_FLAME(template_fname, model_fname, num_samples)
+    if not os.path.exists("./meshes"):
+        os.makedirs("./meshes")
+    sample_FLAME(template_fname, model_fname, num_samples, "./meshes")
 
 def draw_VOCA_template_sample():
     # Path of the Tensorflow FLAME model
