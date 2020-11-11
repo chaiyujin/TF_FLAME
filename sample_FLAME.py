@@ -27,7 +27,6 @@ from utils.landmarks import load_binary_pickle, load_embedding, tf_get_model_lmk
 
 from tf_smpl.batch_smpl import SMPL
 from tensorflow.contrib.opt import ScipyOptimizerInterface as scipy_pt
-from tensorboard import summary
 
 def str2bool(val):
     if isinstance(val, bool):

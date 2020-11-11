@@ -28,7 +28,6 @@ from tf_smpl.batch_smpl import SMPL
 from tensorflow.contrib.opt import ScipyOptimizerInterface as scipy_pt
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-
 def fit_3D_mesh(target_3d_mesh_fname, model_fname, weights, show_fitting=True):
     '''
     Fit FLAME to 3D mesh in correspondence to the FLAME mesh (i.e. same number of vertices, same mesh topology)

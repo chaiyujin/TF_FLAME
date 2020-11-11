@@ -67,13 +67,15 @@ sudo apt-get install python-opengl
 
 ### Data
 
-Download the FLAME model and the MPI texture space from [MPI-IS/FLAME](http://flame.is.tue.mpg.de/). You need to sign up and agree to the model license for access to the model and the data. Further, download the [AlbedoMM (CVPR 2020)](https://github.com/waps101/AlbedoMM) texture space for FLAME.<br/>
-
+Download the FLAME model and the MPI texture space from [MPI-IS/FLAME](http://flame.is.tue.mpg.de/). You need to sign up and agree to the model license for access to the model and the data. Further, download the [FLAME_texture_data](http://files.is.tue.mpg.de/tbolkart/FLAME/FLAME_texture_data.zip) and unpack this into the data folder. If you want to use a statistical appearance texture space for FLAME, download either [AlbedoMM (CVPR 2020)](https://github.com/waps101/AlbedoMM) or the [FLAME texture space](https://flame.is.tue.mpg.de).<br/>
 
 ### Demo
 
-We provide demos to i) draw random samples from FLAME to demonstrate how to edit the different FLAME parameters, ii) to fit FLAME to 3D landmarks, iii) to fit FLAME to a registered 3D mesh (i.e. in FLAME topology), and iv) to generate [VOCA](https://github.com/TimoBolkart/voca) templates.
-
+We provide demos to 
+i) draw random samples from FLAME to demonstrate how to edit the different FLAME parameters, 
+ii) to fit FLAME to 3D landmarks, 
+iii) to fit FLAME to a registered 3D mesh (i.e. in FLAME topology), and 
+iv) to generate [VOCA](https://github.com/TimoBolkart/voca) templates.
 
 ##### Sample FLAME
 
@@ -87,23 +89,23 @@ By default, running this demo uses an OpenGL-based mesh viewer viewer to visuali
 
 This demo demonstrates how to fit FLAME to 2D landmarks. Corresponding 2D landmarks can for instance be automatically predicted using [2D-FAN Torch](https://github.com/1adrianb/2D-and-3D-face-alignment) or [2D-FAN Pytorch](https://github.com/1adrianb/face-alignment). (The test images are taken from CelebA-HQ) 
 ```
-python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ00088.jpeg' --target_lmk_path './data/imgHQ00088_lmks.npy' --out_path './results'
-python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ00095.jpeg' --target_lmk_path './data/imgHQ00095_lmks.npy' --out_path './results'
-python fit_2D_landmarks.py --model_fname './models/male_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ00039.jpeg' --target_lmk_path './data/imgHQ00039_lmks.npy' --out_path './results'
-python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data.npy' --target_img_path './data/imgHQ01148.jpeg' --target_lmk_path './data/imgHQ01148_lmks.npy' --out_path './results'
-
+python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data_512.npy' --target_img_path './data/imgHQ00088.jpeg' --target_lmk_path './data/imgHQ00088_lmks.npy' --out_path './results'
+python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data_512.npy' --target_img_path './data/imgHQ00095.jpeg' --target_lmk_path './data/imgHQ00095_lmks.npy' --out_path './results'
+python fit_2D_landmarks.py --model_fname './models/male_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data_512.npy' --target_img_path './data/imgHQ00039.jpeg' --target_lmk_path './data/imgHQ00039_lmks.npy' --out_path './results'
+python fit_2D_landmarks.py --model_fname './models/female_model.pkl' --flame_lmk_path './data/flame_static_embedding.pkl' --texture_mapping './data/texture_data_512.npy' --target_img_path './data/imgHQ01148.jpeg' --target_lmk_path './data/imgHQ01148_lmks.npy' --out_path './results'
 ```
-By default, running the demo opens a window to visualize the fitting progress. This will fail if running the code remotely. In this case try running the demo with an additional flag ```--visualize False``` to disable the visualization.
+By default, running the demo opens a window to visualize the fitting progress. This will fail if running the code remotely. In this case try running the demo with an additional flag ```--visualize False``` to disable the visualization. If you want to get FLAME textures of resolutions other than 512x512, use texture_data_256.npy, texture_data_1024.npy, or texture_data_2048.npy instead. 
 
 ##### Create textured mesh
 
 This demo demonstrates how to create a textured mesh in FLAME topology by projecting an image onto the fitted FLAME mesh (i.e. obtained by fitting FLAME to 2D landmarks). (The test images are taken from CelebA-HQ)
 ```
-python build_texture_from_image.py --source_img './data/imgHQ00088.jpeg' --target_mesh './results/imgHQ00088.obj' --target_scale './results/imgHQ00088_scale.npy' --texture_mapping './data/texture_data.npy' --out_path './results'
-python build_texture_from_image.py --source_img './data/imgHQ00095.jpeg' --target_mesh './results/imgHQ00095.obj' --target_scale './results/imgHQ00095_scale.npy' --texture_mapping './data/texture_data.npy' --out_path './results'
-python build_texture_from_image.py --source_img './data/imgHQ00039.jpeg' --target_mesh './results/imgHQ00039.obj' --target_scale './results/imgHQ00039_scale.npy' --texture_mapping './data/texture_data.npy' --out_path './results'
-python build_texture_from_image.py --source_img './data/imgHQ01148.jpeg' --target_mesh './results/imgHQ01148.obj' --target_scale './results/imgHQ01148_scale.npy' --texture_mapping './data/texture_data.npy' --out_path './results'
+python build_texture_from_image.py --source_img './data/imgHQ00088.jpeg' --target_mesh './results/imgHQ00088.obj' --target_scale './results/imgHQ00088_scale.npy' --texture_mapping './data/texture_data_512.npy' --out_path './results'
+python build_texture_from_image.py --source_img './data/imgHQ00095.jpeg' --target_mesh './results/imgHQ00095.obj' --target_scale './results/imgHQ00095_scale.npy' --texture_mapping './data/texture_data_512.npy' --out_path './results'
+python build_texture_from_image.py --source_img './data/imgHQ00039.jpeg' --target_mesh './results/imgHQ00039.obj' --target_scale './results/imgHQ00039_scale.npy' --texture_mapping './data/texture_data_512.npy' --out_path './results'
+python build_texture_from_image.py --source_img './data/imgHQ01148.jpeg' --target_mesh './results/imgHQ01148.obj' --target_scale './results/imgHQ01148_scale.npy' --texture_mapping './data/texture_data_512.npy' --out_path './results'
 ```
+If you want to get FLAME textures of resolutions other than 512x512, use texture_data_256.npy, texture_data_1024.npy, or texture_data_2048.npy instead. 
 
 ##### Fit 3D landmarks
 
@@ -140,23 +142,13 @@ python sample_FLAME.py --option sample_VOCA_template --model_fname './models/gen
 ```
 By default, running this demo uses an OpenGL-based mesh viewer viewer to visualize the samples. If this causes any problems, try running the demo with the additional flag --visualize False to disable the visualization.
 
-### Supported projects
-
-FLAME supports several projects such as
-* [VOCA: Voice Operated Character Animation](https://github.com/TimoBolkart/voca)
-* [RingNet: 3D Face Shape and Expression Reconstruction from an Image without 3D Supervision](https://github.com/soubhiksanyal/RingNet)
-* [Expressive Body Capture: 3D Hands, Face, and Body from a Single Image](https://github.com/vchoutas/smplify-x)
-
-FLAME is part of SMPL-X
-* [SMPL-X: A new joint 3D model of the human body, face and hands together](https://github.com/vchoutas/smplx)
-
 
 ## License
 
-FLAME is available under [Creative Commons Attribution license](https://creativecommons.org/licenses/by/4.0/). By using the model or the code code, you acknowledge that you have read the license terms (http://flame.is.tue.mpg.de/model_license), understand them, and agree to be bound by them. If you do not agree with these terms and conditions, you must not use the code.
+FLAME is available under [Creative Commons Attribution license](https://creativecommons.org/licenses/by/4.0/). By using the model or the code code, you acknowledge that you have read the license terms (https://flame.is.tue.mpg.de/modellicense), understand them, and agree to be bound by them. If you do not agree with these terms and conditions, you must not use the code.
 
 
-### Citing
+## Citing
 
 When using this code in a scientific publication, please cite 
 ```
@@ -170,6 +162,18 @@ When using this code in a scientific publication, please cite
   url = {https://doi.org/10.1145/3130800.3130813}
 }
 ```
+
+## Supported projects
+
+FLAME supports several projects such as
+* [GIF: Generative Interpretable Faces](https://github.com/ParthaEth/GIF)
+* [VOCA: Voice Operated Character Animation](https://github.com/TimoBolkart/voca)
+* [RingNet: 3D Face Shape and Expression Reconstruction from an Image without 3D Supervision](https://github.com/soubhiksanyal/RingNet)
+* [Expressive Body Capture: 3D Hands, Face, and Body from a Single Image](https://github.com/vchoutas/smplify-x)
+
+FLAME is part of SMPL-X
+* [SMPL-X: A new joint 3D model of the human body, face and hands together](https://github.com/vchoutas/smplx)
+
 
 ## Acknowledgement
 
