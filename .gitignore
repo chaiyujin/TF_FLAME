@@ -3,3 +3,4 @@ models
 vocaset
 logs
 *.pyc
+FLAME_samples

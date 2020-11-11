@@ -66,6 +66,16 @@ def sample_FLAME(model_fname, num_samples, out_path, visualize, sample_VOCA_temp
     with tf.Session() as session:
         session.run(tf.global_variables_initializer())
 
+        # save the neutral
+        iden = np.zeros(300)
+        expr = np.zeros(100)
+        assign_shape = tf.assign(tf_shape, iden[np.newaxis,:])
+        assign_exp = tf.assign(tf_exp, expr[np.newaxis,:])
+        session.run([assign_shape, assign_exp])
+        out_fname = os.path.join(out_path, 'FLAME_neutral.ply')
+        sample_mesh = Mesh(session.run(tf_model), smpl.f)
+        sample_mesh.write_ply(out_fname)
+
         if visualize:
             mv = MeshViewer()
         for i in range(num_samples):
@@ -75,12 +85,15 @@ def sample_FLAME(model_fname, num_samples, out_path, visualize, sample_VOCA_temp
                 out_fname = os.path.join(out_path, 'VOCA_template_%02d.ply' % (i+1))
             else:
                 # assign_trans = tf.assign(tf_trans, np.random.randn(3)[np.newaxis,:])
-                assign_rot = tf.assign(tf_rot, np.random.randn(3)[np.newaxis,:] * 0.03)
-                assign_pose = tf.assign(tf_pose, np.random.randn(12)[np.newaxis,:] * 0.02)
-                assign_shape = tf.assign(tf_shape, np.hstack((np.random.randn(100), np.zeros(200)))[np.newaxis,:])
-                assign_exp = tf.assign(tf_exp, np.hstack((0.5*np.random.randn(50), np.zeros(50)))[np.newaxis,:])
-                session.run([assign_rot, assign_pose, assign_shape, assign_exp])
-                out_fname = os.path.join(out_path, 'FLAME_sample_%02d.ply' % (i+1))
+                # assign_rot = tf.assign(tf_rot, np.random.randn(3)[np.newaxis,:] * 0.03)
+                # assign_pose = tf.assign(tf_pose, np.random.randn(12)[np.newaxis,:] * 0.02)
+                iden = np.zeros(300)
+                expr = np.zeros(100)
+                expr[i] = 3.0
+                assign_shape = tf.assign(tf_shape, iden[np.newaxis,:])
+                assign_exp = tf.assign(tf_exp, expr[np.newaxis,:])
+                session.run([assign_shape, assign_exp])
+                out_fname = os.path.join(out_path, 'FLAME_sample_expr_%02d.ply' % (i))
 
             sample_mesh = Mesh(session.run(tf_model), smpl.f)
             if visualize:
@@ -90,6 +103,44 @@ def sample_FLAME(model_fname, num_samples, out_path, visualize, sample_VOCA_temp
                     sample_mesh.write_ply(out_fname)
             else:
                 sample_mesh.write_ply(out_fname)
+
+        # jaw open
+        iden = np.zeros(300)
+        expr = np.zeros(100)
+        pose = np.zeros(12)
+        pose[3] = 0.2
+        assign_pose = tf.assign(tf_pose, pose[np.newaxis,:])
+        assign_shape = tf.assign(tf_shape, iden[np.newaxis,:])
+        assign_exp = tf.assign(tf_exp, expr[np.newaxis,:])
+        session.run([assign_pose, assign_shape, assign_exp])
+        out_fname = os.path.join(out_path, 'FLAME_sample_jaw_open.ply')
+        sample_mesh = Mesh(session.run(tf_model), smpl.f)
+        sample_mesh.write_ply(out_fname)
+        # jaw open
+        iden = np.zeros(300)
+        expr = np.zeros(100)
+        pose = np.zeros(12)
+        pose[4] = 0.2
+        assign_pose = tf.assign(tf_pose, pose[np.newaxis,:])
+        assign_shape = tf.assign(tf_shape, iden[np.newaxis,:])
+        assign_exp = tf.assign(tf_exp, expr[np.newaxis,:])
+        session.run([assign_pose, assign_shape, assign_exp])
+        out_fname = os.path.join(out_path, 'FLAME_sample_jaw_left.ply')
+        sample_mesh = Mesh(session.run(tf_model), smpl.f)
+        sample_mesh.write_ply(out_fname)
+        # jaw right
+        iden = np.zeros(300)
+        expr = np.zeros(100)
+        pose = np.zeros(12)
+        pose[4] = -0.2
+        assign_pose = tf.assign(tf_pose, pose[np.newaxis,:])
+        assign_shape = tf.assign(tf_shape, iden[np.newaxis,:])
+        assign_exp = tf.assign(tf_exp, expr[np.newaxis,:])
+        session.run([assign_pose, assign_shape, assign_exp])
+        out_fname = os.path.join(out_path, 'FLAME_sample_jaw_right.ply')
+        sample_mesh = Mesh(session.run(tf_model), smpl.f)
+        sample_mesh.write_ply(out_fname)
+
 
 def main(args):
     if not os.path.exists(args.model_fname):
@@ -112,4 +163,3 @@ if __name__ == '__main__':
     parser.add_argument('--visualize', default='True', help='Visualize fitting progress and final fitting result')
     args = parser.parse_args()
     main(args)
-
